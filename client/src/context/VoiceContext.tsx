@@ -172,7 +172,7 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
     const helpText = `
       Voca-Flash Accessibility Help. 
       Keyboard shortcuts: Control V to toggle voice recognition, Control 1 for dashboard, Control 2 for create flashcard, Control 3 for view cards, Control 4 for study mode.
-      Voice commands: say "create new flashcard", "view cards", "study mode", "help", "next card", "previous card", "flip card", "save", "cancel".
+      Voice commands: say "create new flashcard", "view cards", "study mode", "help", "next card", "previous card", "flip card", "read card", "delete card", "save", "cancel".
       Press Control H anytime for this help message.
     `;
     speak(helpText);

@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, Volume2, Trash2, RotateCcw } from 'lucide-re
 
 const FlashcardViewer: React.FC = () => {
   const { flashcards, loading, deleteFlashcard, getFlashcards } = useFlashcards();
-  const { speak, isListening } = useVoice();
+  const { speak, isListening, registerCommandHandler, unregisterCommandHandler } = useVoice();
   
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -17,7 +17,7 @@ const FlashcardViewer: React.FC = () => {
 
   useEffect(() => {
     if (isListening && flashcards.length > 0) {
-      speak(`Viewing flashcard ${currentIndex + 1} of ${flashcards.length}. Say "next card" or "previous card" to navigate`);
+      speak(`Viewing flashcard ${currentIndex + 1} of ${flashcards.length}. Voice commands: "next card", "previous card", "flip card", "read card", "delete card", "help"`);
     }
   }, [isListening, currentIndex, flashcards.length, speak]);
 
@@ -26,6 +26,31 @@ const FlashcardViewer: React.FC = () => {
     : flashcards.filter(card => card.category === selectedCategory);
 
   const categories = ['all', ...Array.from(new Set(flashcards.map(card => card.category)))];
+
+  // Voice command handling
+  useEffect(() => {
+    const handleVoiceCommands = (command: string) => {
+      if (command.includes('next card') || command.includes('next')) {
+        nextCard();
+      } else if (command.includes('previous card') || command.includes('previous') || command.includes('back')) {
+        previousCard();
+      } else if (command.includes('flip card') || command.includes('flip')) {
+        flipCard();
+      } else if (command.includes('read card') || command.includes('read')) {
+        readCard();
+      } else if (command.includes('delete card') || command.includes('delete')) {
+        handleDelete(currentCard?.id || '');
+      } else if (command.includes('help')) {
+        speak('Voice commands: next card, previous card, flip card, read card, delete card, help');
+      }
+    };
+
+    registerCommandHandler(handleVoiceCommands);
+
+    return () => {
+      unregisterCommandHandler();
+    };
+  }, [currentIndex, filteredCards.length, registerCommandHandler, unregisterCommandHandler, speak]);
 
   const nextCard = () => {
     if (currentIndex < filteredCards.length - 1) {
@@ -59,23 +84,40 @@ const FlashcardViewer: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this flashcard?')) {
-      try {
-        await deleteFlashcard(id);
-        speak('Flashcard deleted');
-        if (currentIndex >= filteredCards.length - 1) {
-          setCurrentIndex(Math.max(0, currentIndex - 1));
+    const currentCard = filteredCards[currentIndex];
+    if (currentCard) {
+      speak(`Are you sure you want to delete the flashcard: ${currentCard.front}? Say "yes" to confirm or "no" to cancel`);
+      
+      // Set up a temporary command handler for delete confirmation
+      const deleteConfirmHandler = (command: string) => {
+        if (command.includes('yes') || command.includes('confirm')) {
+          deleteCardConfirmed(id);
+          unregisterCommandHandler();
+        } else if (command.includes('no') || command.includes('cancel')) {
+          speak('Delete cancelled');
+          unregisterCommandHandler();
         }
-      } catch (error) {
-        speak('Error deleting flashcard');
+      };
+      registerCommandHandler(deleteConfirmHandler);
+    }
+  };
+
+  const deleteCardConfirmed = async (id: string) => {
+    try {
+      await deleteFlashcard(id);
+      speak('Flashcard deleted successfully');
+      if (currentIndex >= filteredCards.length - 1) {
+        setCurrentIndex(Math.max(0, currentIndex - 1));
       }
+    } catch (error) {
+      speak('Error deleting flashcard');
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }

@@ -6,7 +6,7 @@ import { BookOpen, Plus, Brain, BarChart3, Mic, Keyboard } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { flashcards, loading, getFlashcards } = useFlashcards();
-  const { speak, isListening } = useVoice();
+  const { speak, isListening, registerCommandHandler, unregisterCommandHandler } = useVoice();
 
   useEffect(() => {
     getFlashcards();
@@ -14,9 +14,30 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (isListening) {
-      speak('Dashboard. Keyboard shortcuts: Control V for voice recognition, Control 1-4 for navigation. Voice commands: say "create new flashcard", "view cards", or "study mode"');
+      speak('Dashboard. Voice commands: "create new flashcard", "view cards", "study mode", "help". Keyboard shortcuts: Control V for voice recognition, Control 1-4 for navigation');
     }
   }, [isListening, speak]);
+
+  // Voice command handling
+  useEffect(() => {
+    const handleVoiceCommands = (command: string) => {
+      if (command.includes('create new flashcard') || command.includes('create card') || command.includes('create')) {
+        window.location.href = '/create';
+      } else if (command.includes('view cards') || command.includes('view card') || command.includes('view')) {
+        window.location.href = '/view';
+      } else if (command.includes('study mode') || command.includes('study') || command.includes('practice')) {
+        window.location.href = '/study';
+      } else if (command.includes('help')) {
+        speak('Available commands: create new flashcard, view cards, study mode, help. You can also use keyboard shortcuts Control 1-4 for navigation');
+      }
+    };
+
+    registerCommandHandler(handleVoiceCommands);
+
+    return () => {
+      unregisterCommandHandler();
+    };
+  }, [registerCommandHandler, unregisterCommandHandler, speak]);
 
   const stats = [
     {
@@ -72,7 +93,7 @@ const Dashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -161,7 +182,7 @@ const Dashboard: React.FC = () => {
               <Link
                 key={feature.path}
                 to={feature.path}
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label={`${feature.title}. ${feature.description}. ${feature.shortcut} shortcut available. ${feature.voiceCommand}`}
               >
                 <div className="text-center">

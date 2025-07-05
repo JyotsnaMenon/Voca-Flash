@@ -10,6 +10,7 @@ interface VoiceContextType {
   registerCommandHandler: (handler: (command: string) => void) => void;
   unregisterCommandHandler: () => void;
   clearTranscript: () => void;
+  announceHelp: () => void;
 }
 
 const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
@@ -167,6 +168,16 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
     setTranscript('');
   }, []);
 
+  const announceHelp = useCallback(() => {
+    const helpText = `
+      Voca-Flash Accessibility Help. 
+      Keyboard shortcuts: Control V to toggle voice recognition, Control 1 for dashboard, Control 2 for create flashcard, Control 3 for view cards, Control 4 for study mode.
+      Voice commands: say "create new flashcard", "view cards", "study mode", "help", "next card", "previous card", "flip card", "save", "cancel".
+      Press Control H anytime for this help message.
+    `;
+    speak(helpText);
+  }, [speak]);
+
   const value: VoiceContextType = {
     isListening,
     transcript,
@@ -176,7 +187,8 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
     isSpeaking,
     registerCommandHandler,
     unregisterCommandHandler,
-    clearTranscript
+    clearTranscript,
+    announceHelp
   };
 
   return (

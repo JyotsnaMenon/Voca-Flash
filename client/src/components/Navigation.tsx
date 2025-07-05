@@ -1,27 +1,57 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useVoice } from '../context/VoiceContext';
 import { Mic, MicOff, Home, Plus, BookOpen, Brain } from 'lucide-react';
 
 const Navigation: React.FC = () => {
   const location = useLocation();
-  const { isListening, startListening, stopListening, speak } = useVoice();
+  const { isListening, startListening, stopListening, speak, announceHelp } = useVoice();
+
+  // Keyboard shortcuts for accessibility
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Ctrl/Cmd + V to toggle voice recognition
+      if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+        event.preventDefault();
+        handleVoiceToggle();
+      }
+      
+      // Ctrl/Cmd + H for help
+      if ((event.ctrlKey || event.metaKey) && event.key === 'h') {
+        event.preventDefault();
+        announceHelp();
+      }
+      
+      // Ctrl/Cmd + 1-4 for navigation
+      if ((event.ctrlKey || event.metaKey) && ['1', '2', '3', '4'].includes(event.key)) {
+        event.preventDefault();
+        const navIndex = parseInt(event.key) - 1;
+        const navItems = ['/', '/create', '/view', '/study'];
+        if (navItems[navIndex]) {
+          window.location.href = navItems[navIndex];
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [announceHelp]);
 
   const handleVoiceToggle = () => {
     if (isListening) {
       stopListening();
-      speak('Voice recognition stopped');
+      speak('Voice recognition stopped. Press Control V to start again');
     } else {
       startListening();
-      speak('Voice recognition started. Say "create new flashcard" to begin');
+      speak('Voice recognition started. Say "create new flashcard" to begin. Press Control V to stop');
     }
   };
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: Home, ariaLabel: 'Go to dashboard' },
-    { path: '/create', label: 'Create', icon: Plus, ariaLabel: 'Create new flashcard' },
-    { path: '/view', label: 'View Cards', icon: BookOpen, ariaLabel: 'View all flashcards' },
-    { path: '/study', label: 'Study', icon: Brain, ariaLabel: 'Start study mode' },
+    { path: '/', label: 'Dashboard', icon: Home, ariaLabel: 'Go to dashboard', shortcut: 'Ctrl+1' },
+    { path: '/create', label: 'Create', icon: Plus, ariaLabel: 'Create new flashcard', shortcut: 'Ctrl+2' },
+    { path: '/view', label: 'View Cards', icon: BookOpen, ariaLabel: 'View all flashcards', shortcut: 'Ctrl+3' },
+    { path: '/study', label: 'Study', icon: Brain, ariaLabel: 'Start study mode', shortcut: 'Ctrl+4' },
   ];
 
   return (
@@ -56,7 +86,7 @@ const Navigation: React.FC = () => {
                         ? 'bg-blue-100 text-blue-700 border-b-2 border-blue-600'
                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                     }`}
-                    aria-label={item.ariaLabel}
+                    aria-label={`${item.ariaLabel}. ${item.shortcut} shortcut available`}
                     aria-current={isActive ? 'page' : undefined}
                   >
                     <div className="flex items-center space-x-2">
@@ -78,15 +108,16 @@ const Navigation: React.FC = () => {
                   ? 'bg-red-500 text-white focus:ring-red-500 voice-listening'
                   : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
               }`}
-              aria-label={isListening ? 'Stop voice recognition' : 'Start voice recognition'}
+              aria-label={`${isListening ? 'Stop' : 'Start'} voice recognition. Press Control V for keyboard shortcut`}
               aria-pressed={isListening}
+              title={`${isListening ? 'Stop' : 'Start'} voice recognition (Ctrl+V)`}
             >
               {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
             </button>
             
             {/* Voice Status Indicator */}
             {isListening && (
-              <div className="hidden sm:flex items-center space-x-2 text-sm text-green-600">
+              <div className="hidden sm:flex items-center space-x-2 text-sm text-green-600" role="status" aria-live="polite">
                 <div className="w-2 h-2 bg-green-500 rounded-full voice-listening"></div>
                 <span>Listening</span>
               </div>
@@ -110,7 +141,7 @@ const Navigation: React.FC = () => {
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
-                  aria-label={item.ariaLabel}
+                  aria-label={`${item.ariaLabel}. ${item.shortcut} shortcut available`}
                   aria-current={isActive ? 'page' : undefined}
                 >
                   <div className="flex items-center space-x-3">

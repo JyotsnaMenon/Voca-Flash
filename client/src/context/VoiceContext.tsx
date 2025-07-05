@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 
 interface VoiceContextType {
   isListening: boolean;
@@ -7,6 +7,9 @@ interface VoiceContextType {
   stopListening: () => void;
   speak: (text: string) => void;
   isSpeaking: boolean;
+  registerCommandHandler: (handler: (command: string) => void) => void;
+  unregisterCommandHandler: () => void;
+  clearTranscript: () => void;
 }
 
 const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
@@ -29,11 +32,12 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
   const [speechSynthesis, setSpeechSynthesis] = useState<any>(null);
+  const [commandHandler, setCommandHandler] = useState<((command: string) => void) | null>(null);
 
   useEffect(() => {
     // Initialize Web Speech API
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognitionInstance = new SpeechRecognition();
       
       recognitionInstance.continuous = true;
@@ -47,18 +51,55 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
 
       recognitionInstance.onresult = (event: any) => {
         let finalTranscript = '';
+        let interimTranscript = '';
+        
         for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            finalTranscript += event.results[i][0].transcript;
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
           }
         }
-        setTranscript(finalTranscript);
-        handleVoiceCommand(finalTranscript);
+        
+        // Update transcript with both final and interim results
+        const fullTranscript = finalTranscript + interimTranscript;
+        setTranscript(fullTranscript);
+        
+        // Call the registered command handler if available and we have final results
+        if (commandHandler && finalTranscript.trim()) {
+          commandHandler(finalTranscript.toLowerCase());
+        }
       };
 
       recognitionInstance.onerror = (event: any) => {
         console.error('Speech recognition error:', event.error);
+        
+        // Handle specific errors
+        if (event.error === 'no-speech') {
+          console.log('No speech detected');
+        } else if (event.error === 'audio-capture') {
+          console.log('Audio capture error');
+        } else if (event.error === 'not-allowed') {
+          console.log('Microphone access denied');
+        } else if (event.error === 'network') {
+          console.log('Network error');
+        }
+        
         setIsListening(false);
+        
+        // Restart recognition after a short delay for recoverable errors
+        if (['no-speech', 'network'].includes(event.error)) {
+          setTimeout(() => {
+            if (recognitionInstance) {
+              try {
+                recognitionInstance.start();
+              } catch (error) {
+                console.log('Failed to restart recognition:', error);
+              }
+            }
+          }, 1000);
+        }
       };
 
       recognitionInstance.onend = () => {
@@ -72,21 +113,32 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
     if ('speechSynthesis' in window) {
       setSpeechSynthesis(window.speechSynthesis);
     }
-  }, []);
+  }, [commandHandler]);
 
-  const startListening = () => {
-    if (recognition) {
-      recognition.start();
+  const startListening = useCallback(() => {
+    if (recognition && !isListening) {
+      try {
+        recognition.start();
+      } catch (error) {
+        console.log('Speech recognition already started or error:', error);
+        // If it's already started, just set the state
+        setIsListening(true);
+      }
     }
-  };
+  }, [recognition, isListening]);
 
-  const stopListening = () => {
-    if (recognition) {
-      recognition.stop();
+  const stopListening = useCallback(() => {
+    if (recognition && isListening) {
+      try {
+        recognition.stop();
+      } catch (error) {
+        console.log('Speech recognition stop error:', error);
+        setIsListening(false);
+      }
     }
-  };
+  }, [recognition, isListening]);
 
-  const speak = (text: string) => {
+  const speak = useCallback((text: string) => {
     if (speechSynthesis) {
       // Stop any current speech
       speechSynthesis.cancel();
@@ -101,37 +153,19 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
       
       speechSynthesis.speak(utterance);
     }
-  };
+  }, [speechSynthesis]);
 
-  const handleVoiceCommand = (command: string) => {
-    const lowerCommand = command.toLowerCase();
-    
-    if (lowerCommand.includes('create new flashcard')) {
-      speak('Opening flashcard creator');
-      window.location.href = '/create';
-    } else if (lowerCommand.includes('next card')) {
-      speak('Moving to next card');
-      // Handle next card logic
-    } else if (lowerCommand.includes('previous card')) {
-      speak('Moving to previous card');
-      // Handle previous card logic
-    } else if (lowerCommand.includes('read card')) {
-      speak('Reading current card');
-      // Handle read card logic
-    } else if (lowerCommand.includes('flip card')) {
-      speak('Flipping card');
-      // Handle flip card logic
-    } else if (lowerCommand.includes('start quiz')) {
-      speak('Starting quiz mode');
-      window.location.href = '/study';
-    } else if (lowerCommand.includes('stop')) {
-      speak('Stopping current operation');
-      stopListening();
-    } else if (lowerCommand.includes('go home')) {
-      speak('Going to dashboard');
-      window.location.href = '/';
-    }
-  };
+  const registerCommandHandler = useCallback((handler: (command: string) => void) => {
+    setCommandHandler(() => handler);
+  }, []);
+
+  const unregisterCommandHandler = useCallback(() => {
+    setCommandHandler(null);
+  }, []);
+
+  const clearTranscript = useCallback(() => {
+    setTranscript('');
+  }, []);
 
   const value: VoiceContextType = {
     isListening,
@@ -139,7 +173,10 @@ export const VoiceProvider: React.FC<VoiceProviderProps> = ({ children }) => {
     startListening,
     stopListening,
     speak,
-    isSpeaking
+    isSpeaking,
+    registerCommandHandler,
+    unregisterCommandHandler,
+    clearTranscript
   };
 
   return (

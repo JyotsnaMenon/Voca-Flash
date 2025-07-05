@@ -49,16 +49,8 @@
 }
 
 .voice-listening {
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  /* Very subtle glow effect - no animation */
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.3);
 }
 
 /* Flashcard animations */
@@ -91,12 +83,17 @@
   @apply focus:ring-red-500;
 }
 
-/* Voice command indicator */
+/* Voice command indicator - static, no animation */
 .voice-indicator {
   @apply fixed top-4 right-4 z-50;
   @apply bg-green-500 text-white px-3 py-1 rounded-full;
   @apply flex items-center space-x-2;
-  @apply animate-pulse;
+  @apply transition-all duration-300;
+}
+
+/* Static listening indicator - no animation */
+.voice-indicator.listening {
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.3);
 }
 
 /* Responsive design */

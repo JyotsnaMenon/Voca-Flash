@@ -75,7 +75,7 @@ const Navigation: React.FC = () => {
               onClick={handleVoiceToggle}
               className={`p-3 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                 isListening
-                  ? 'bg-red-500 text-white focus:ring-red-500 animate-pulse'
+                  ? 'bg-red-500 text-white focus:ring-red-500 voice-listening'
                   : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500'
               }`}
               aria-label={isListening ? 'Stop voice recognition' : 'Start voice recognition'}
@@ -87,7 +87,7 @@ const Navigation: React.FC = () => {
             {/* Voice Status Indicator */}
             {isListening && (
               <div className="hidden sm:flex items-center space-x-2 text-sm text-green-600">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full voice-listening"></div>
                 <span>Listening</span>
               </div>
             )}

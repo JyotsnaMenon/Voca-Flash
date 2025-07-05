@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFlashcards } from '../context/FlashcardContext';
 import { useVoice } from '../context/VoiceContext';
-import { ChevronLeft, ChevronRight, Volume2, Edit, Trash2, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Volume2, Trash2, RotateCcw } from 'lucide-react';
 
 const FlashcardViewer: React.FC = () => {
   const { flashcards, loading, deleteFlashcard, getFlashcards } = useFlashcards();
@@ -25,7 +25,7 @@ const FlashcardViewer: React.FC = () => {
     ? flashcards 
     : flashcards.filter(card => card.category === selectedCategory);
 
-  const categories = ['all', ...new Set(flashcards.map(card => card.category))];
+  const categories = ['all', ...Array.from(new Set(flashcards.map(card => card.category)))];
 
   const nextCard = () => {
     if (currentIndex < filteredCards.length - 1) {

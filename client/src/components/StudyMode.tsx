@@ -1,38 +1,102 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useFlashcards } from '../context/FlashcardContext';
 import { useVoice } from '../context/VoiceContext';
-import { Check, X, RotateCcw, Volume2, Play, Pause } from 'lucide-react';
+import { Check, X, RotateCcw, Volume2, Play, Pause, Mic, MicOff } from 'lucide-react';
 
 const StudyMode: React.FC = () => {
   const { flashcards, loading } = useFlashcards();
-  const { speak, isListening } = useVoice();
+  const { speak, isListening, startListening, stopListening, transcript, registerCommandHandler, unregisterCommandHandler } = useVoice();
   
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [showAnswer, setShowAnswer] = useState(false);
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [isQuizMode, setIsQuizMode] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [autoRead, setAutoRead] = useState(true);
+  const [lastCommand, setLastCommand] = useState('');
 
+  const cardRef = useRef<HTMLDivElement>(null);
   const filteredCards = selectedCategory === 'all' 
     ? flashcards 
     : flashcards.filter(card => card.category === selectedCategory);
 
-  const categories = ['all', ...new Set(flashcards.map(card => card.category))];
+  const categories = ['all', ...Array.from(new Set(flashcards.map(card => card.category)))];
 
-  useEffect(() => {
-    if (isListening && filteredCards.length > 0) {
-      const mode = isQuizMode ? 'quiz' : 'study';
-      speak(`${mode} mode. Card ${currentIndex + 1} of ${filteredCards.length}. Say "flip card" to see the answer`);
+  // Voice command handling
+  const handleVoiceCommand = useCallback((command: string) => {
+    console.log('Voice command received:', command);
+    
+    if (command.includes('next card') || command.includes('next')) {
+      nextCard();
+    } else if (command.includes('previous card') || command.includes('previous') || command.includes('back')) {
+      previousCard();
+    } else if (command.includes('flip card') || command.includes('flip')) {
+      flipCard();
+    } else if (command.includes('read card') || command.includes('read')) {
+      readCard();
+    } else if (command.includes('correct') || command.includes('right')) {
+      if (isQuizMode) {
+        markCorrect();
+      } else {
+        speak('Not in quiz mode. Say "start quiz" to begin quiz mode.');
+      }
+    } else if (command.includes('incorrect') || command.includes('wrong')) {
+      if (isQuizMode) {
+        markIncorrect();
+      } else {
+        speak('Not in quiz mode. Say "start quiz" to begin quiz mode.');
+      }
+    } else if (command.includes('start quiz')) {
+      startQuiz();
+    } else if (command.includes('end quiz') || command.includes('stop quiz')) {
+      endQuiz();
+    } else if (command.includes('toggle listening') || command.includes('listen')) {
+      if (isListening) {
+        stopListening();
+        speak('Voice recognition stopped');
+      } else {
+        startListening();
+        speak('Voice recognition started. You can now use voice commands.');
+      }
+    } else if (command.includes('auto read') || command.includes('auto read off')) {
+      setAutoRead(!autoRead);
+      speak(`Auto read ${autoRead ? 'disabled' : 'enabled'}`);
+    } else if (command.includes('go home') || command.includes('dashboard')) {
+      window.location.href = '/';
+    } else if (command.includes('create card') || command.includes('new card')) {
+      window.location.href = '/create';
+    } else if (command.includes('help') || command.includes('commands')) {
+      speak('Available commands: next card, previous card, flip card, read card, start quiz, end quiz, correct, incorrect, toggle listening, auto read, go home, create card, help');
     }
-  }, [isListening, currentIndex, filteredCards.length, isQuizMode, speak]);
+  }, [isQuizMode, isListening, autoRead, speak, startListening, stopListening]);
+
+  // Register command handler when component mounts
+  useEffect(() => {
+    registerCommandHandler(handleVoiceCommand);
+    return () => {
+      unregisterCommandHandler();
+    };
+  }, [registerCommandHandler, unregisterCommandHandler, handleVoiceCommand]);
+
+  // Auto-read card when it changes
+  useEffect(() => {
+    if (autoRead && filteredCards.length > 0 && !loading) {
+      const currentCard = filteredCards[currentIndex];
+      if (currentCard) {
+        const mode = isQuizMode ? 'quiz' : 'study';
+        const cardContent = isFlipped ? currentCard.back : currentCard.front;
+        speak(`${mode} mode. Card ${currentIndex + 1} of ${filteredCards.length}. ${isFlipped ? 'Answer' : 'Question'}: ${cardContent}. Say "flip card" to see the ${isFlipped ? 'question' : 'answer'}`);
+      }
+    }
+  }, [currentIndex, isFlipped, filteredCards, isQuizMode, autoRead, loading, speak]);
 
   const nextCard = () => {
     if (currentIndex < filteredCards.length - 1) {
       setCurrentIndex(currentIndex + 1);
       setIsFlipped(false);
-      setShowAnswer(false);
-      speak(`Card ${currentIndex + 2} of ${filteredCards.length}`);
+      speak(`Moving to card ${currentIndex + 2} of ${filteredCards.length}`);
+    } else {
+      speak('This is the last card');
     }
   };
 
@@ -40,8 +104,9 @@ const StudyMode: React.FC = () => {
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
       setIsFlipped(false);
-      setShowAnswer(false);
-      speak(`Card ${currentIndex} of ${filteredCards.length}`);
+      speak(`Moving to card ${currentIndex} of ${filteredCards.length}`);
+    } else {
+      speak('This is the first card');
     }
   };
 
@@ -49,14 +114,18 @@ const StudyMode: React.FC = () => {
     setIsFlipped(!isFlipped);
     const currentCard = filteredCards[currentIndex];
     if (currentCard) {
-      speak(isFlipped ? currentCard.front : currentCard.back);
+      const content = isFlipped ? currentCard.front : currentCard.back;
+      const side = isFlipped ? 'question' : 'answer';
+      speak(`${side}: ${content}`);
     }
   };
 
   const readCard = () => {
     const currentCard = filteredCards[currentIndex];
     if (currentCard) {
-      speak(isFlipped ? currentCard.back : currentCard.front);
+      const content = isFlipped ? currentCard.back : currentCard.front;
+      const side = isFlipped ? 'answer' : 'question';
+      speak(`${side}: ${content}`);
     }
   };
 
@@ -77,8 +146,7 @@ const StudyMode: React.FC = () => {
     setScore({ correct: 0, total: 0 });
     setCurrentIndex(0);
     setIsFlipped(false);
-    setShowAnswer(false);
-    speak('Quiz mode started. Answer each card as correct or incorrect');
+    speak('Quiz mode started. Answer each card as correct or incorrect. Say "correct" or "incorrect" to mark your answer.');
   };
 
   const endQuiz = () => {
@@ -87,19 +155,37 @@ const StudyMode: React.FC = () => {
     speak(`Quiz ended. You got ${score.correct} out of ${score.total} correct. That's ${percentage} percent`);
   };
 
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+      speak('Voice recognition stopped');
+    } else {
+      startListening();
+      speak('Voice recognition started. You can now use voice commands.');
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-64" role="status" aria-live="polite">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" aria-label="Loading flashcards"></div>
+        <span className="sr-only">Loading flashcards...</span>
       </div>
     );
   }
 
   if (filteredCards.length === 0) {
     return (
-      <div className="text-center py-12">
+      <div className="text-center py-12" role="region" aria-label="No flashcards available">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">No Flashcards Available</h2>
-        <p className="text-gray-600">Create some flashcards to start studying!</p>
+        <p className="text-gray-600 mb-4">Create some flashcards to start studying!</p>
+        <button
+          onClick={() => window.location.href = '/create'}
+          className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+          aria-label="Go to create flashcards page"
+        >
+          Create Flashcards
+        </button>
       </div>
     );
   }
@@ -107,7 +193,7 @@ const StudyMode: React.FC = () => {
   const currentCard = filteredCards[currentIndex];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto space-y-8" role="main" aria-label="Study mode">
       {/* Header */}
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-4">
@@ -119,6 +205,59 @@ const StudyMode: React.FC = () => {
             : 'Review flashcards with voice assistance'
           }
         </p>
+      </div>
+
+      {/* Voice Control Panel */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Voice Controls</h2>
+        <div className="flex flex-wrap gap-4 items-center">
+          <button
+            onClick={toggleListening}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+              isListening 
+                ? 'bg-red-600 text-white hover:bg-red-700' 
+                : 'bg-green-600 text-white hover:bg-green-700'
+            }`}
+            aria-label={isListening ? 'Stop voice recognition' : 'Start voice recognition'}
+            aria-pressed={isListening}
+          >
+            {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            <span>{isListening ? 'Stop Listening' : 'Start Listening'}</span>
+          </button>
+
+          <button
+            onClick={() => setAutoRead(!autoRead)}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+              autoRead 
+                ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                : 'bg-gray-600 text-white hover:bg-gray-700'
+            }`}
+            aria-label={`${autoRead ? 'Disable' : 'Enable'} auto read`}
+            aria-pressed={autoRead}
+          >
+            <Volume2 className="h-5 w-5" />
+            <span>Auto Read {autoRead ? 'On' : 'Off'}</span>
+          </button>
+
+          <button
+            onClick={() => handleVoiceCommand('help')}
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
+            aria-label="Show voice commands help"
+          >
+            <span>Voice Commands Help</span>
+          </button>
+        </div>
+        
+        {isListening && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Listening for commands...</strong> Say "help" for available commands.
+            </p>
+            {transcript && (
+              <p className="text-xs text-blue-600 mt-1">Heard: "{transcript}"</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Quiz Controls */}
@@ -137,19 +276,19 @@ const StudyMode: React.FC = () => {
 
       {/* Quiz Score */}
       {isQuizMode && (
-        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+        <div className="bg-white rounded-lg shadow-md p-6 text-center" role="region" aria-label="Quiz progress">
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Quiz Progress</h3>
           <div className="flex justify-center space-x-8">
             <div>
-              <p className="text-2xl font-bold text-green-600">{score.correct}</p>
+              <p className="text-2xl font-bold text-green-600" aria-label={`${score.correct} correct answers`}>{score.correct}</p>
               <p className="text-sm text-gray-600">Correct</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">{score.total}</p>
+              <p className="text-2xl font-bold text-gray-900" aria-label={`${score.total} total questions`}>{score.total}</p>
               <p className="text-sm text-gray-600">Total</p>
             </div>
             <div>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-2xl font-bold text-blue-600" aria-label={`${score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0} percent score`}>
                 {score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0}%
               </p>
               <p className="text-sm text-gray-600">Score</p>
@@ -179,9 +318,10 @@ const StudyMode: React.FC = () => {
               setSelectedCategory(e.target.value);
               setCurrentIndex(0);
               setIsFlipped(false);
-              setShowAnswer(false);
+              speak(`Switched to ${e.target.value === 'all' ? 'all categories' : e.target.value} category`);
             }}
             className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Select study category"
           >
             {categories.map(category => (
               <option key={category} value={category}>
@@ -197,20 +337,21 @@ const StudyMode: React.FC = () => {
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl w-full">
           {/* Card Counter */}
           <div className="text-center mb-6">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600" aria-label={`Card ${currentIndex + 1} of ${filteredCards.length}`}>
               Card {currentIndex + 1} of {filteredCards.length}
             </p>
           </div>
 
           {/* Flashcard */}
           <div 
+            ref={cardRef}
             className={`flashcard relative w-full h-64 cursor-pointer ${
               isFlipped ? 'flipped' : ''
             }`}
             onClick={flipCard}
             role="button"
             tabIndex={0}
-            aria-label="Click to flip card"
+            aria-label={`${isFlipped ? 'Answer' : 'Question'}: ${isFlipped ? currentCard.back : currentCard.front}. Click to flip card`}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -293,25 +434,40 @@ const StudyMode: React.FC = () => {
       </div>
 
       {/* Voice Commands Help */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6" role="region" aria-label="Voice commands help">
         <h2 className="text-lg font-semibold text-blue-900 mb-4">Voice Commands</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div>
             <h3 className="font-medium text-blue-800 mb-2">Navigation:</h3>
             <ul className="space-y-1 text-blue-700">
-              <li>• "Next card" - Move to next card</li>
-              <li>• "Previous card" - Move to previous card</li>
-              <li>• "Read card" - Read current card aloud</li>
-              <li>• "Flip card" - Flip between front and back</li>
+              <li>• "Next card" or "Next" - Move to next card</li>
+              <li>• "Previous card" or "Previous" or "Back" - Move to previous card</li>
+              <li>• "Read card" or "Read" - Read current card aloud</li>
+              <li>• "Flip card" or "Flip" - Flip between front and back</li>
             </ul>
           </div>
           <div>
             <h3 className="font-medium text-blue-800 mb-2">Quiz Mode:</h3>
             <ul className="space-y-1 text-blue-700">
-              <li>• "Correct" - Mark answer as correct</li>
-              <li>• "Incorrect" - Mark answer as incorrect</li>
+              <li>• "Correct" or "Right" - Mark answer as correct</li>
+              <li>• "Incorrect" or "Wrong" - Mark answer as incorrect</li>
               <li>• "Start quiz" - Begin quiz mode</li>
-              <li>• "End quiz" - Finish quiz mode</li>
+              <li>• "End quiz" or "Stop quiz" - Finish quiz mode</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-medium text-blue-800 mb-2">Controls:</h3>
+            <ul className="space-y-1 text-blue-700">
+              <li>• "Toggle listening" or "Listen" - Start/stop voice recognition</li>
+              <li>• "Auto read" - Toggle automatic card reading</li>
+              <li>• "Help" or "Commands" - Show this help</li>
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-medium text-blue-800 mb-2">Navigation:</h3>
+            <ul className="space-y-1 text-blue-700">
+              <li>• "Go home" or "Dashboard" - Return to dashboard</li>
+              <li>• "Create card" or "New card" - Go to card creator</li>
             </ul>
           </div>
         </div>
